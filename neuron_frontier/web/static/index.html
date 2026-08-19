@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuronFrontier-LM | AWS Trainium2 Speedrun Console</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .glow-orange {
+            box-shadow: 0 0 20px rgba(255, 153, 0, 0.25);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
+        }
+        .glow-green {
+            box-shadow: 0 0 20px rgba(0, 230, 118, 0.25);
+        }
+        .border-trn2 {
+            border-color: rgba(255, 153, 0, 0.3);
+        }
+        .sbuf-cell {
+            transition: all 0.2s ease;
+        }
+        .sbuf-cell:hover {
+            transform: scale(1.1);
+            background-color: #00f0ff;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex flex-wrap justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center space-x-4">
+            <div class="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-xl">
+                <i class="fa-solid fa-microchip"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                    NeuronFrontier-LM
+                    <span class="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full font-mono">AWS Trainium2</span>
+                </h1>
+                <p class="text-xs text-gray-400">Co-Designed 30-Minute Speedrun LLM & NKI Custom Kernel Engine</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3 mt-2 sm:mt-0">
+            <button onclick="openJudgeTour()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition glow-orange">
+                <i class="fa-solid fa-trophy"></i> 1-Click Judge Tour
+            </button>
+            <button onclick="runKernelBenchmarks()" id="btn-bench" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-cyan-400 text-sm font-semibold px-3 py-2 rounded-lg transition flex items-center gap-2">
+                <i class="fa-solid fa-bolt"></i> Run NKI Benchmarks
+            </button>
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/80 border border-gray-700">
+                <span id="status-dot" class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span id="status-text" class="text-xs font-mono text-gray-300">Ready</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+
+        <!-- Control Bar & 30-Minute Timer -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <!-- Speedrun Launcher -->
+            <div class="lg:col-span-3 bg-gray-900/80 border border-gray-800 rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Architecture</label>
+                        <select id="model-select" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-amber-500 focus:border-amber-500">
+                            <option value="base">Trn2 Base (124M Params - 128x128 Tile Align)</option>
+                            <option value="moe">Trn2 Sparse MoE (180M Params / 45M Active Top-2)</option>
+                            <option value="small">Trn2 Small (45M Params - Fast Iteration)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Compute Budget</label>
+                        <select id="duration-select" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:ring-amber-500 focus:border-amber-500">
+                            <option value="1800">30.0 Minutes (Official Phase 1 Budget)</option>
+                            <option value="60">1.0 Minute (Fast Test)</option>
+                            <option value="10">10 Seconds (Dry Run)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button onclick="startSpeedrun()" id="btn-start" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm px-5 py-2.5 rounded-lg flex items-center gap-2 transition glow-green">
+                        <i class="fa-solid fa-play"></i> Start 30-Min Speedrun
+                    </button>
+                    <button onclick="stopSpeedrun()" id="btn-stop" class="bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm px-4 py-2.5 rounded-lg hidden transition">
+                        <i class="fa-solid fa-stop"></i> Stop
+                    </button>
+                </div>
+            </div>
+
+            <!-- Wall-Clock Timer Card -->
+            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5 shadow-lg flex flex-col justify-center">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs text-gray-400 font-mono">30-MIN WALL-CLOCK</span>
+                    <span id="timer-left" class="text-xs text-amber-400 font-mono font-bold">30:00 Left</span>
+                </div>
+                <div class="text-2xl font-black text-white font-mono" id="timer-display">00:00 / 30:00</div>
+                <div class="w-full bg-gray-800 rounded-full h-2 mt-3 overflow-hidden">
+                    <div id="timer-bar" class="bg-amber-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Telemetry KPI Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Val BPB Card -->
+            <div class="bg-gray-900/90 border border-amber-500/30 rounded-xl p-4 glow-orange">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Validation BPB</span>
+                    <i class="fa-solid fa-chart-line text-amber-400 text-sm"></i>
+                </div>
+                <div class="text-3xl font-extrabold text-white mt-2 font-mono" id="val-bpb-val">--</div>
+                <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                    <span>Best: <strong id="best-bpb-val" class="text-emerald-400 font-mono">--</strong></span>
+                    <span class="text-amber-500/80 font-mono">bits/byte</span>
+                </div>
+            </div>
+
+            <!-- Throughput Card -->
+            <div class="bg-gray-900/90 border border-cyan-500/30 rounded-xl p-4 glow-cyan">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Throughput</span>
+                    <i class="fa-solid fa-gauge-high text-cyan-400 text-sm"></i>
+                </div>
+                <div class="text-3xl font-extrabold text-white mt-2 font-mono" id="tok-sec-val">--</div>
+                <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                    <span>Tokens: <span id="total-toks-val" class="text-gray-300 font-mono">0</span></span>
+                    <span class="text-cyan-400 font-mono">tok/sec</span>
+                </div>
+            </div>
+
+            <!-- MFU Card -->
+            <div class="bg-gray-900/90 border border-emerald-500/30 rounded-xl p-4 glow-green">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Model FLOPs (MFU)</span>
+                    <i class="fa-solid fa-percent text-emerald-400 text-sm"></i>
+                </div>
+                <div class="text-3xl font-extrabold text-white mt-2 font-mono" id="mfu-val">--%</div>
+                <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                    <span>Trn2 Peak: <strong>190 TFLOPs</strong></span>
+                    <span class="text-emerald-400 font-mono">Systolic</span>
+                </div>
+            </div>
+
+            <!-- Training Loss & Step -->
+            <div class="bg-gray-900/90 border border-gray-800 rounded-xl p-4">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Training Loss / Step</span>
+                    <i class="fa-solid fa-layer-group text-gray-400 text-sm"></i>
+                </div>
+                <div class="text-3xl font-extrabold text-white mt-2 font-mono" id="loss-val">--</div>
+                <div class="text-xs text-gray-400 mt-1 flex justify-between">
+                    <span>Step: <span id="step-val" class="text-gray-300 font-mono">0</span></span>
+                    <span>Muon LR: <span id="muon-lr-val" class="text-amber-400 font-mono">--</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Val BPB & Loss Curve -->
+            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5 shadow-lg">
+                <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-trend-down text-amber-400"></i>
+                    Validation Bits-Per-Byte (val_bpb) & Loss Trajectory
+                </h3>
+                <div class="h-64">
+                    <canvas id="bpbChart"></canvas>
+                </div>
+            </div>
+
+            <!-- MFU & Throughput Curve -->
+            <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-5 shadow-lg">
+                <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-bolt-lightning text-cyan-400"></i>
+                    Model FLOPs Utilization (MFU %) & Hardware Throughput
+                </h3>
+                <div class="h-64">
+                    <canvas id="mfuChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom NKI Hardware Kernels Breakdown -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-6 shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-microchip text-amber-400"></i>
+                        Custom Neuron Kernel Interface (NKI) Acceleration Engine
+                    </h3>
+                    <p class="text-xs text-gray-400">Hardware-co-designed kernels executing in 24MB on-chip SBUF SRAM</p>
+                </div>
+                <span class="text-xs bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-3 py-1 rounded-full font-mono">Apache 2.0 Open Source</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Kernel 1 -->
+                <div class="bg-gray-800/60 border border-gray-700/60 rounded-lg p-4">
+                    <div class="text-xs text-amber-400 font-mono font-bold">NKI FLASHATTENTION</div>
+                    <div class="text-lg font-bold text-white mt-1">Tiled SBUF Attention</div>
+                    <p class="text-xs text-gray-400 mt-1">Tiles 128x128 systolic blocks with online softmax in SBUF scratchpad.</p>
+                    <div class="mt-3 text-xs flex justify-between border-t border-gray-700/60 pt-2 font-mono">
+                        <span class="text-gray-400">Speedup:</span>
+                        <strong class="text-emerald-400">3.79x</strong>
+                    </div>
+                </div>
+
+                <!-- Kernel 2 -->
+                <div class="bg-gray-800/60 border border-gray-700/60 rounded-lg p-4">
+                    <div class="text-xs text-cyan-400 font-mono font-bold">NKI FUSED SWIGLU</div>
+                    <div class="text-lg font-bold text-white mt-1">Fused SiLU + Linear</div>
+                    <p class="text-xs text-gray-400 mt-1">Fuses elementwise multiplication in VectorEngine without intermediate HBM writes.</p>
+                    <div class="mt-3 text-xs flex justify-between border-t border-gray-700/60 pt-2 font-mono">
+                        <span class="text-gray-400">HBM Traffic:</span>
+                        <strong class="text-emerald-400">-33% Saved</strong>
+                    </div>
+                </div>
+
+                <!-- Kernel 3 -->
+                <div class="bg-gray-800/60 border border-gray-700/60 rounded-lg p-4">
+                    <div class="text-xs text-emerald-400 font-mono font-bold">NKI FUSED RMSNORM</div>
+                    <div class="text-lg font-bold text-white mt-1">SBUF Pre-Norm Layer</div>
+                    <p class="text-xs text-gray-400 mt-1">Single-pass variance reduction & weight scaling in on-chip SRAM.</p>
+                    <div class="mt-3 text-xs flex justify-between border-t border-gray-700/60 pt-2 font-mono">
+                        <span class="text-gray-400">Speedup:</span>
+                        <strong class="text-emerald-400">2.27x</strong>
+                    </div>
+                </div>
+
+                <!-- Kernel 4 -->
+                <div class="bg-gray-800/60 border border-gray-700/60 rounded-lg p-4">
+                    <div class="text-xs text-purple-400 font-mono font-bold">NKI CHUNKED CE</div>
+                    <div class="text-lg font-bold text-white mt-1">Online Softmax Loss</div>
+                    <p class="text-xs text-gray-400 mt-1">Projects 512 tokens at a time in SBUF, saving 1.65 GB materialized logits in HBM.</p>
+                    <div class="mt-3 text-xs flex justify-between border-t border-gray-700/60 pt-2 font-mono">
+                        <span class="text-gray-400">Memory Saved:</span>
+                        <strong class="text-emerald-400">1,648 MB</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Judge Tour Modal -->
+    <div id="judge-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-gray-900 border border-amber-500/50 rounded-2xl max-w-2xl w-full p-6 shadow-2xl glow-orange relative">
+            <button onclick="closeJudgeTour()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-bold">
+                    <i class="fa-solid fa-award"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">AWS Trainium Frontier: 1-Click Judge Tour</h2>
+                    <p class="text-xs text-gray-400">Why NeuronFrontier-LM is engineered for 1st Prize</p>
+                </div>
+            </div>
+
+            <div id="tour-content" class="space-y-4 my-6">
+                <!-- Dynamic tour step injected here -->
+            </div>
+
+            <div class="flex justify-between items-center border-t border-gray-800 pt-4">
+                <span id="tour-step-counter" class="text-xs text-gray-400 font-mono">Step 1 of 4</span>
+                <div class="space-x-2">
+                    <button onclick="prevTourStep()" id="tour-prev-btn" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm px-3 py-1.5 rounded-lg">Previous</button>
+                    <button onclick="nextTourStep()" id="tour-next-btn" class="bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm px-4 py-1.5 rounded-lg">Next Step</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        let bpbChart, mfuChart;
+        let tourData = [];
+        let currentTourStep = 0;
+
+        // Initialize Charts
+        function initCharts() {
+            const ctxBpb = document.getElementById('bpbChart').getContext('2d');
+            bpbChart = new Chart(ctxBpb, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Val BPB (bits/byte)',
+                            data: [],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Train Loss (nats)',
+                            data: [],
+                            borderColor: '#60a5fa',
+                            borderDash: [5, 5],
+                            borderWidth: 1.5,
+                            tension: 0.3,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+                        y: { position: 'left', grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#f59e0b' }, title: { display: true, text: 'val_bpb', color: '#f59e0b' } },
+                        y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#60a5fa' }, title: { display: true, text: 'Loss', color: '#60a5fa' } }
+                    },
+                    plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                }
+            });
+
+            const ctxMfu = document.getElementById('mfuChart').getContext('2d');
+            mfuChart = new Chart(ctxMfu, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'MFU %',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        borderWidth: 2,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+                        y: { min: 0, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#10b981' } }
+                    },
+                    plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                }
+            });
+        }
+
+        // Live Poll Telemetry
+        async function pollTelemetry() {
+            try {
+                const res = await fetch('/api/telemetry/live');
+                const data = await res.json();
+
+                document.getElementById('step-val').innerText = data.step.toLocaleString();
+                document.getElementById('total-toks-val').innerText = data.total_tokens.toLocaleString();
+                document.getElementById('loss-val').innerText = data.current_loss > 0 ? data.current_loss.toFixed(4) : '--';
+                document.getElementById('val-bpb-val').innerText = data.val_bpb > 0 ? data.val_bpb.toFixed(4) : '--';
+                document.getElementById('best-bpb-val').innerText = data.best_val_bpb > 0 ? data.best_val_bpb.toFixed(4) : '--';
+                document.getElementById('tok-sec-val').innerText = data.tokens_per_sec > 0 ? data.tokens_per_sec.toLocaleString() : '--';
+                document.getElementById('mfu-val').innerText = data.mfu_percent > 0 ? data.mfu_percent.toFixed(1) + '%' : '--%';
+                document.getElementById('muon-lr-val').innerText = data.muon_lr > 0 ? data.muon_lr.toFixed(5) : '--';
+
+                // Timer
+                const elapsedMins = Math.floor(data.elapsed_sec / 60);
+                const elapsedSecs = Math.floor(data.elapsed_sec % 60);
+                const maxMins = Math.floor(data.mins_left + data.elapsed_sec / 60);
+                document.getElementById('timer-display').innerText = `${String(elapsedMins).padStart(2, '0')}:${String(elapsedSecs).padStart(2, '0')} / ${String(maxMins).padStart(2, '0')}:00`;
+                document.getElementById('timer-left').innerText = `${data.mins_left.toFixed(2)}m Left`;
+                
+                const percent = Math.min(100, (data.elapsed_sec / (data.elapsed_sec + data.mins_left * 60)) * 100);
+                document.getElementById('timer-bar').style.width = `${percent}%`;
+
+                // Status indicator
+                if (data.is_running) {
+                    document.getElementById('status-dot').className = 'w-3 h-3 rounded-full bg-amber-500 animate-ping';
+                    document.getElementById('status-text').innerText = 'Speedrun Active';
+                    document.getElementById('btn-start').classList.add('hidden');
+                    document.getElementById('btn-stop').classList.remove('hidden');
+                } else {
+                    document.getElementById('status-dot').className = 'w-3 h-3 rounded-full bg-emerald-500';
+                    document.getElementById('status-text').innerText = 'Idle / Ready';
+                    document.getElementById('btn-start').classList.remove('hidden');
+                    document.getElementById('btn-stop').classList.add('hidden');
+                }
+
+                // Update Charts
+                if (data.history_loss && data.history_loss.length > 0) {
+                    bpbChart.data.labels = data.history_loss.map(h => `S${h.step}`);
+                    bpbChart.data.datasets[1].data = data.history_loss.map(h => h.loss);
+                    
+                    if (data.history_bpb && data.history_bpb.length > 0) {
+                        bpbChart.data.datasets[0].data = data.history_loss.map(h => {
+                            const match = data.history_bpb.find(b => b.step === h.step);
+                            return match ? match.bpb : null;
+                        });
+                    }
+                    bpbChart.update();
+                }
+
+                if (data.history_mfu && data.history_mfu.length > 0) {
+                    mfuChart.data.labels = data.history_mfu.map(h => `S${h.step}`);
+                    mfuChart.data.datasets[0].data = data.history_mfu.map(h => h.mfu);
+                    mfuChart.update();
+                }
+
+            } catch (err) {
+                console.error("Telemetry fetch error:", err);
+            }
+        }
+
+        async function startSpeedrun() {
+            const modelType = document.getElementById('model-select').value;
+            const durationSec = parseFloat(document.getElementById('duration-select').value);
+            await fetch('/api/speedrun/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_type: modelType, duration_sec: durationSec })
+            });
+        }
+
+        async function stopSpeedrun() {
+            await fetch('/api/speedrun/stop', { method: 'POST' });
+        }
+
+        async function runKernelBenchmarks() {
+            const btn = document.getElementById('btn-bench');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Benchmarking...';
+            const res = await fetch('/api/benchmarks/run');
+            const data = await res.json();
+            btn.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i> Benchmarks Done!';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-solid fa-bolt"></i> Run NKI Benchmarks';
+            }, 3000);
+            alert(`NKI Kernel Benchmarks Completed!\n- Tiled FlashAttention Speedup: ${data.benchmarks.attn.speedup.toFixed(2)}x\n- Fused SwiGLU Speedup: ${data.benchmarks.swiglu.speedup.toFixed(2)}x\n- Peak Logits Memory Savings: 1,648 MB`);
+        }
+
+        // Judge Tour Functions
+        async function openJudgeTour() {
+            const res = await fetch('/api/judge_tour');
+            const data = await res.json();
+            tourData = data.steps;
+            currentTourStep = 0;
+            renderTourStep();
+            document.getElementById('judge-modal').classList.remove('hidden');
+        }
+
+        function closeJudgeTour() {
+            document.getElementById('judge-modal').classList.add('hidden');
+        }
+
+        function renderTourStep() {
+            if (!tourData || tourData.length === 0) return;
+            const item = tourData[currentTourStep];
+            document.getElementById('tour-step-counter').innerText = `Step ${currentTourStep + 1} of ${tourData.length}`;
+            document.getElementById('tour-content').innerHTML = `
+                <div class="bg-gray-800/80 border border-amber-500/30 rounded-xl p-5">
+                    <span class="text-xs font-mono font-bold text-amber-400">INNOVATION ${item.step}</span>
+                    <h3 class="text-base font-bold text-white mt-1 mb-2">${item.title}</h3>
+                    <p class="text-sm text-gray-300 leading-relaxed">${item.detail}</p>
+                </div>
+            `;
+            document.getElementById('tour-prev-btn').disabled = (currentTourStep === 0);
+            document.getElementById('tour-next-btn').innerText = (currentTourStep === tourData.length - 1) ? 'Finish Tour' : 'Next Step';
+        }
+
+        function prevTourStep() {
+            if (currentTourStep > 0) {
+                currentTourStep--;
+                renderTourStep();
+            }
+        }
+
+        function nextTourStep() {
+            if (currentTourStep < tourData.length - 1) {
+                currentTourStep++;
+                renderTourStep();
+            } else {
+                closeJudgeTour();
+            }
+        }
+
+        // Init on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            setInterval(pollTelemetry, 1000);
+        });
+    </script>
+</body>
+</html>

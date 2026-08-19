@@ -1,0 +1,64 @@
+# ==============================================================================
+# AWS Trainium Frontier - IP Protection & Submission .gitignore
+# ==============================================================================
+
+# 1. Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# 2. Model Checkpoints & Large Binaries (Keep source code only)
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.h5
+*.onnx
+
+# 3. Private / Proprietary Research Notes & Drafts
+private/
+drafts/
+research_notes/
+internal_experiments/
+*.secret
+*.draft
+*.paper_draft
+
+# 4. Local Telemetry & Experiment Logs
+experiment_logs/
+*.log
+wandb/
+runs/
+tensorboard_logs/
+
+# 5. Local Databases & Raw Data
+*.db
+*.sqlite3
+*.csv
+*.parquet
+*.jsonl
+data/raw/
+data/processed/
+
+# 6. Credentials & Environment Secrets
+.env
+.env.*
+*.pem
+*.key
+*.token
+credentials.json
+aws_credentials
+
+# 7. IDE & Operating System Artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
